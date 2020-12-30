@@ -27,6 +27,7 @@ import (
 // control over error handling or large tokens, or must run sequential scans
 // on a reader, should use bufio.Reader instead.
 //
+// 处理如按行读取输入序列或空格分隔单词等，这类简单的任务。
 type Scanner struct {
 	r            io.Reader // The reader provided by the client.
 	split        SplitFunc // The function to split the tokens.
@@ -62,6 +63,10 @@ type Scanner struct {
 // The function is never called with an empty data slice unless atEOF
 // is true. If atEOF is true, however, data may be non-empty and,
 // as always, holds unprocessed text.
+// 用于对输入进行分词的split函数签名 data是还处理的数据
+// atEOF 标识 Reader 是否还有更多数据（是否到了EOF）。
+// 返回值 advance 表示从输入中读取的字节数，token 表示下一个结果数据，
+// err 则代表可能的错误
 type SplitFunc func(data []byte, atEOF bool) (advance int, token []byte, err error)
 
 // Errors returned by Scanner.

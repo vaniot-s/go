@@ -87,6 +87,7 @@ func ContainsRune(b []byte, r rune) bool {
 }
 
 // IndexByte returns the index of the first instance of c in b, or -1 if c is not present in b.
+// IndexByte返回b中c的第一个实例的索引；如果b中不存在c，则返回-1。
 func IndexByte(b []byte, c byte) int {
 	return bytealg.IndexByte(b, c)
 }
