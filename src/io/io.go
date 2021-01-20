@@ -80,6 +80,14 @@ var ErrNoProgress = errors.New("multiple Read calls return no data or error")
 // nothing happened; in particular it does not indicate EOF.
 //
 // Implementations must not retain p.
+// Read将len(p)个字节读取到p中。它返回读取的字节数n(0<=n<=len(p))以及任何遇到的错误。
+// 即使 Read 返回的n<len(p)，它也会在调用过程中占用 len(p) 个字节作为暂存空间.
+// 若可读取的数据不到len(p)个字节,Read会返回可用数据,而不是等待更多数据.当Read在成功读取n>0个字节后遇到一个错误或EOF(end-of-file)，
+// 它会返回读取的字节数。它可能会同时在本次的调用中返回一个non-nil错误,或在下一次的调用中返回这个错误（且 n 为 0）。
+// 一般情况下, Reader会返回一个非0字节数n, 若 n = len(p) 个字节从输入源的结尾处由Read返回,Read可能返回err==EOF或者err == nil。
+// 并且之后的 Read() 都应该返回 (n:0, err:EOF)。调用者在考虑错误之前应当首先处理返回的数据。
+// 这样做可以正确地处理在读取一些字节后产生的 I/O 错误，同时允许EOF的出现。
+// 实现不得保留p。
 type Reader interface {
 	Read(p []byte) (n int, err error)
 }
@@ -93,6 +101,9 @@ type Reader interface {
 // Write must not modify the slice data, even temporarily.
 //
 // Implementations must not retain p.
+// Write 将len(p)个字节从p中写入到基本数据流中。它返回从p中被写入的字节数n(0<=n<=len(p))
+// 以及任何遇到的引起写入提前停止的错误。若Write返回的n<len(p)，
+// 它就必须返回一个 非nil的错误。
 type Writer interface {
 	Write(p []byte) (n int, err error)
 }
@@ -101,6 +112,8 @@ type Writer interface {
 //
 // The behavior of Close after the first call is undefined.
 // Specific implementations may document their own behavior.
+// 第一次调用后关闭的行为是不确定的。
+// 特定的实现可以记录自己的行为
 type Closer interface {
 	Close() error
 }

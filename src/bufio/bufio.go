@@ -105,7 +105,7 @@ var errNegativeRead = errors.New("bufio: reader returned negative count from Rea
 // fill将新的块读入缓冲区。
 func (b *Reader) fill() {
 	// Slide existing data to beginning.
-	//将现有数据滑动到开头。
+	// 将现有数据滑动到开头,将现有的数据写到buf中，相当于
 	if b.r > 0 {
 		copy(b.buf, b.buf[b.r:b.w])
 		b.w -= b.r
@@ -120,7 +120,7 @@ func (b *Reader) fill() {
 	// Read new data: try a limited number of times.
 	//读取新数据：尝试有限次数。
 	for i := maxConsecutiveEmptyReads; i > 0; i-- {
-		// 将read的数据写入buf
+		// 将io.read的数据写入buf ？？
 		n, err := b.rd.Read(b.buf[b.w:])
 		if n < 0 {
 			panic(errNegativeRead)
@@ -151,6 +151,7 @@ func (b *Reader) readErr() error {
 //
 // Calling Peek prevents a UnreadByte or UnreadRune call from succeeding
 // until the next read operation.
+// 获取当前r索引后的n个字节，但不会移动r的索引
 func (b *Reader) Peek(n int) ([]byte, error) {
 	if n < 0 {
 		return nil, ErrNegativeCount
@@ -185,6 +186,7 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 // If Discard skips fewer than n bytes, it also returns an error.
 // If 0 <= n <= b.Buffered(), Discard is guaranteed to succeed without
 // reading from the underlying io.Reader.
+// 跳过接下来的
 func (b *Reader) Discard(n int) (discarded int, err error) {
 	if n < 0 {
 		return 0, ErrNegativeCount
@@ -194,11 +196,13 @@ func (b *Reader) Discard(n int) (discarded int, err error) {
 	}
 	remain := n
 	for {
+		// 已缓存未读的数据
 		skip := b.Buffered()
 		if skip == 0 {
 			b.fill()
 			skip = b.Buffered()
 		}
+		// 如果skip>remain 直接跳过
 		if skip > remain {
 			skip = remain
 		}
