@@ -76,8 +76,12 @@ var depsRules = `
 	  unicode/utf8, unicode/utf16, unicode,
 	  unsafe;
 
+	# These packages depend only on unsafe.
+	unsafe
+	< internal/abi;
+
 	# RUNTIME is the core runtime group of packages, all of them very light-weight.
-	internal/cpu, unsafe
+	internal/abi, internal/cpu, unsafe
 	< internal/bytealg
 	< internal/unsafeheader
 	< runtime/internal/sys
@@ -178,7 +182,7 @@ var depsRules = `
 	reflect !< OS;
 
 	OS
-	< golang.org/x/sys/cpu, internal/goroot;
+	< golang.org/x/sys/cpu;
 
 	# FMT is OS (which includes string routines) plus reflect and fmt.
 	# It does not include package log, which should be avoided in core packages.
@@ -193,6 +197,12 @@ var depsRules = `
 	< FMT;
 
 	log !< FMT;
+
+	OS, FMT
+	< internal/execabs;
+
+	OS, internal/execabs
+	< internal/goroot;
 
 	# Misc packages needing only FMT.
 	FMT
@@ -269,7 +279,10 @@ var depsRules = `
 	< go/ast
 	< go/parser;
 
-	go/parser, text/tabwriter
+	FMT
+	< go/build/constraint;
+
+	go/build/constraint, go/parser, text/tabwriter
 	< go/printer
 	< go/format;
 
@@ -279,10 +292,10 @@ var depsRules = `
 	math/big, go/token
 	< go/constant;
 
-	container/heap, go/constant, go/parser
+	container/heap, go/constant, go/parser, regexp
 	< go/types;
 
-	go/doc, go/parser, internal/goroot, internal/goversion
+	go/build/constraint, go/doc, go/parser, internal/goroot, internal/goversion
 	< go/build;
 
 	DEBUG, go/build, go/types, text/scanner

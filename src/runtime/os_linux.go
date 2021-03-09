@@ -375,6 +375,11 @@ func unminit() {
 	unminitSignals()
 }
 
+// Called from exitm, but not from drop, to undo the effect of thread-owned
+// resources in minit, semacreate, or elsewhere. Do not take locks after calling this.
+func mdestroy(mp *m) {
+}
+
 //#ifdef GOARCH_386
 //#define sa_handler k_sa_handler
 //#endif
@@ -404,6 +409,11 @@ func raiseproc(sig uint32)
 //go:noescape
 func sched_getaffinity(pid, len uintptr, buf *byte) int32
 func osyield()
+
+//go:nosplit
+func osyield_no_g() {
+	osyield()
+}
 
 func pipe() (r, w int32, errno int32)
 func pipe2(flags int32) (r, w int32, errno int32)

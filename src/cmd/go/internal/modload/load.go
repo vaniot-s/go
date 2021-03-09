@@ -134,6 +134,11 @@ type PackageOpts struct {
 	// If nil, treated as equivalent to imports.Tags().
 	Tags map[string]bool
 
+	// VendorModulesInGOROOTSrc indicates that if we are within a module in
+	// GOROOT/src, packages in the module's vendor directory should be resolved as
+	// actual module dependencies (instead of standard-library packages).
+	VendorModulesInGOROOTSrc bool
+
 	// ResolveMissingImports indicates that we should attempt to add module
 	// dependencies as needed to resolve imports of packages that are not found.
 	//
@@ -169,6 +174,12 @@ type PackageOpts struct {
 	// SilenceErrors indicates that LoadPackages should not print errors
 	// that occur while loading packages. SilenceErrors implies AllowErrors.
 	SilenceErrors bool
+
+	// SilenceMissingStdImports indicates that LoadPackages should not print
+	// errors or terminate the process if an imported package is missing, and the
+	// import path looks like it might be in the standard library (perhaps in a
+	// future version).
+	SilenceMissingStdImports bool
 
 	// SilenceUnmatchedWarnings suppresses the warnings normally emitted for
 	// patterns that did not match any packages.
@@ -280,15 +291,20 @@ func LoadPackages(ctx context.Context, opts PackageOpts, patterns ...string) (ma
 	checkMultiplePaths()
 	for _, pkg := range loaded.pkgs {
 		if pkg.err != nil {
-			if pkg.flags.has(pkgInAll) {
-				if imErr := (*ImportMissingError)(nil); errors.As(pkg.err, &imErr) {
-					imErr.inAll = true
-				} else if sumErr := (*ImportMissingSumError)(nil); errors.As(pkg.err, &sumErr) {
-					sumErr.inAll = true
+			if sumErr := (*ImportMissingSumError)(nil); errors.As(pkg.err, &sumErr) {
+				if importer := pkg.stack; importer != nil {
+					sumErr.importer = importer.path
+					sumErr.importerVersion = importer.mod.Version
+					sumErr.importerIsTest = importer.testOf != nil
 				}
 			}
+			silence := opts.SilenceErrors
+			if stdErr := (*ImportMissingError)(nil); errors.As(pkg.err, &stdErr) &&
+				stdErr.isStd && opts.SilenceMissingStdImports {
+				silence = true
+			}
 
-			if !opts.SilenceErrors {
+			if !silence {
 				if opts.AllowErrors {
 					fmt.Fprintf(os.Stderr, "%s: %v\n", pkg.stackText(), pkg.err)
 				} else {
@@ -870,7 +886,7 @@ func loadFromRoots(params loaderParams) *loader {
 						// base.Errorf. Ideally, 'go list' should not fail because of this,
 						// but today, LoadPackages calls WriteGoMod unconditionally, which
 						// would fail with a less clear message.
-						base.Errorf("go: %[1]s: package %[2]s imported from implicitly required module; try 'go get -d %[1]s' to add missing requirements", pkg.path, dep.path)
+						base.Errorf("go: %[1]s: package %[2]s imported from implicitly required module; to add missing requirements, run:\n\tgo get %[2]s@%[3]s", pkg.path, dep.path, dep.mod.Version)
 					}
 					ld.direct[dep.mod.Path] = true
 				}
@@ -1083,13 +1099,20 @@ func (ld *loader) load(pkg *loadPkg) {
 		}
 	}
 
-	imports, testImports, err := scanDir(pkg.dir, ld.Tags)
-	if err != nil {
-		pkg.err = err
-		return
-	}
-
 	pkg.inStd = (search.IsStandardImportPath(pkg.path) && search.InDir(pkg.dir, cfg.GOROOTsrc) != "")
+
+	var imports, testImports []string
+
+	if cfg.BuildContext.Compiler == "gccgo" && pkg.inStd {
+		// We can't scan standard packages for gccgo.
+	} else {
+		var err error
+		imports, testImports, err = scanDir(pkg.dir, ld.Tags)
+		if err != nil {
+			pkg.err = err
+			return
+		}
+	}
 
 	pkg.imports = make([]*loadPkg, 0, len(imports))
 	var importFlags loadPkgFlags
@@ -1163,13 +1186,13 @@ func (ld *loader) stdVendor(parentPath, path string) string {
 	}
 
 	if str.HasPathPrefix(parentPath, "cmd") {
-		if Target.Path != "cmd" {
+		if !ld.VendorModulesInGOROOTSrc || Target.Path != "cmd" {
 			vendorPath := pathpkg.Join("cmd", "vendor", path)
 			if _, err := os.Stat(filepath.Join(cfg.GOROOTsrc, filepath.FromSlash(vendorPath))); err == nil {
 				return vendorPath
 			}
 		}
-	} else if Target.Path != "std" || str.HasPathPrefix(parentPath, "vendor") {
+	} else if !ld.VendorModulesInGOROOTSrc || Target.Path != "std" || str.HasPathPrefix(parentPath, "vendor") {
 		// If we are outside of the 'std' module, resolve imports from within 'std'
 		// to the vendor directory.
 		//
